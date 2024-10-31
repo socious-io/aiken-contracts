@@ -1,0 +1,12 @@
+{
+  "name": "aiken-contracts",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "https://github.com/socious-io/aiken-contracts.git",
+  "author": "card <cardenaso11@users.noreply.github.com>",
+  "license": "MIT",
+  "dependencies": {
+    "@meshsdk/core": "^1.7.10",
+    "cbor": "^10.0.2"
+  }
+}
