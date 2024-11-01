@@ -1,3 +1,4 @@
+use aiken/cbor
 use aiken/transaction.{ScriptContext, Spend, Transaction}
 use aiken/transaction/credential.{Address}
 use aiken/transaction/value.{add, from_asset, from_lovelace}
@@ -47,12 +48,16 @@ fn fee_address() -> Address {
 fn initiation_datum() -> EscrowDatum {
   let initiator_assets: MValue = test_lovelace()
   let fee_assets: MValue = test_lovelace()
-  Initiation {
-    initiator: initiator_address(),
-    initiator_assets: initiator_assets,
-    fee_address: fee_address(),
-    fee_assets,
-  }
+  let initiation_datum: EscrowDatum =
+    Initiation {
+      initiator: initiator_address(),
+      initiator_assets,
+      fee_address: fee_address(),
+      fee_assets,
+    }
+  trace @"Initiation datum"
+  trace cbor.diagnostic(initiation_datum)
+  initiation_datum
 }
 
 fn active_datum(recipient: Address, recipient_assets: MValue) -> EscrowDatum {
@@ -90,12 +95,12 @@ fn get_cancel_test_tx(test_case: CancelTestCase) -> Transaction {
     }
   //TODO(Elaine): check this & also the total_input_lovelace bit
   let fee_output_value = 0
-    // if is_fee_received_value {
-    //   from_lovelace(2_000_000)
-    // } else {
-    //   from_lovelace(0)
-    // }
 
+  // if is_fee_received_value {
+  //   from_lovelace(2_000_000)
+  // } else {
+  //   from_lovelace(0)
+  // }
   // let total_input_lovelace = if is_fee_received_value { 4_000_000 } else { 2_000_000 }
   let total_input_lovelace = 2_000_000
 
@@ -126,6 +131,8 @@ fn get_cancel_test_tx(test_case: CancelTestCase) -> Transaction {
 test success_cancel() {
   let output_reference = mock_utxo_ref(0, 1)
   let unused_mock_datum = initiation_datum()
+  trace @"Success cancel called"
+  trace cbor.diagnostic(unused_mock_datum)
   let redeemer = CancelTrade
   let test_case =
     CancelTestCase {
@@ -135,7 +142,7 @@ test success_cancel() {
       // is_fee_received_value: True,
       is_initiator_signed: False,
       is_recipient_signed: False,
-      is_fee_signed: True, 
+      is_fee_signed: True,
     }
 
   let tx = get_cancel_test_tx(test_case)
@@ -154,10 +161,11 @@ test success_cancel_at_initiation() {
       is_recipient_received_value: True,
       is_initiator_signed: True,
       is_recipient_signed: False,
-      is_fee_signed: True, // ERROR(Elaine): not sure if this is actually an error but at time of writing (165a3190a62) fee AND initiator must sign to cancel while at_initiation
-                           // I think it makes sense but I need to be more confident before deploying
+      is_fee_signed: True,
     }
 
+  // ERROR(Elaine): not sure if this is actually an error but at time of writing (165a3190a62) fee AND initiator must sign to cancel while at_initiation
+  // I think it makes sense but I need to be more confident before deploying
   let tx = get_cancel_test_tx(test_case)
   let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
   escrow(unused_mock_datum, redeemer, ctx)
@@ -172,9 +180,10 @@ test success_cancel_at_active_with_initiator_signed() {
       is_at_initiation: False,
       is_initiator_received_value: True,
       is_recipient_received_value: True,
-      is_initiator_signed: False, // TODO(Elaine): original test was True, make a version with this
-                                  // we probably want a test variant to make sure fee signing implies (->/iff) success (given well formed)
-                                  // we don't want ANY cancellations to be successful without fee signing
+      is_initiator_signed: False,
+      // TODO(Elaine): original test was True, make a version with this
+      // we probably want a test variant to make sure fee signing implies (->/iff) success (given well formed)
+      // we don't want ANY cancellations to be successful without fee signing
       is_recipient_signed: False,
       is_fee_signed: True,
     }
@@ -194,7 +203,8 @@ test success_cancel_at_active_with_recipient_signed() {
       is_initiator_received_value: True,
       is_recipient_received_value: True,
       is_initiator_signed: False,
-      is_recipient_signed: False, // used to be True in original test
+      is_recipient_signed: False,
+      // used to be True in original test
       is_fee_signed: True,
     }
 
@@ -213,7 +223,8 @@ test fail_cancel_at_initiation_without_signature() {
       is_initiator_received_value: True,
       is_recipient_received_value: True,
       is_initiator_signed: False,
-      is_recipient_signed: True, // used to be True in original test
+      is_recipient_signed: True,
+      // used to be True in original test
       is_fee_signed: True,
     }
 
@@ -232,7 +243,8 @@ test fail_cancel_without_signature() {
       is_initiator_received_value: True,
       is_recipient_received_value: True,
       // is_fee_received_value: True,
-      is_initiator_signed: False, // TODO(Elaine): we want a variant to test that neither initiator nor recipient can cancel
+      is_initiator_signed: False,
+      // TODO(Elaine): we want a variant to test that neither initiator nor recipient can cancel
       is_recipient_signed: False,
       is_fee_signed: False,
     }
@@ -283,13 +295,15 @@ test fail_cancel_without_recipient_value_returned() {
 // recipient will be the person recieving pay for their work
 type RecipientDepositTestCase {
   is_datum_updated: Bool,
-  is_value_deposited: Bool, // FIXME(Elaine): this might actually be orthogonal
-  // is_fee_deposited: Bool, // FIXME(Elaine): do we need this? for now lets not actually use this, since fee is deposited by intiiator (ocean protection), not recipient.
-  // fee must be deposited for initiation to be well formed anyways
+  is_value_deposited: Bool,
 }
 
+// FIXME(Elaine): this might actually be orthogonal
+// is_fee_deposited: Bool, // FIXME(Elaine): do we need this? for now lets not actually use this, since fee is deposited by intiiator (ocean protection), not recipient.
+// fee must be deposited for initiation to be well formed anyways
+
 fn get_deposit_test_tx(test_case: RecipientDepositTestCase) -> Transaction {
-  let RecipientDepositTestCase { is_datum_updated, is_value_deposited, } =
+  let RecipientDepositTestCase { is_datum_updated, is_value_deposited } =
     test_case
   let input_value = from_lovelace(2_000_000)
   let output_value =
@@ -314,6 +328,7 @@ fn get_deposit_test_tx(test_case: RecipientDepositTestCase) -> Transaction {
     |> tx_out_inline_datum(!is_datum_updated, initiation_datum())
     |> complete()
 }
+
 //FIXME(Elaine): this is failing
 test success_deposit() {
   let output_reference = mock_utxo_ref(0, 1)
@@ -458,7 +473,8 @@ test fail_complete_without_initiator_signed() {
     CompleteTestCase {
       is_initiator_signed: False,
       is_initiator_received_value: True,
-      is_recipient_signed: True, // NOTE(Elaine): fee signing should make this pass, make a new test
+      is_recipient_signed: True,
+      // NOTE(Elaine): fee signing should make this pass, make a new test
       is_recipient_received_value: True,
       is_fee_signed: False,
       is_fee_received_value: True,
@@ -511,6 +527,7 @@ test fail_complete_without_recipeint_signed() {
 test fail_complete_without_value_sent_to_recipient() {
   let output_reference = mock_utxo_ref(0, 1)
   let unused_mock_datum = initiation_datum()
+  trace @"fail complete without value sent to recipient test"
   let redeemer = CompleteTrade
   let test_case =
     CompleteTestCase {
