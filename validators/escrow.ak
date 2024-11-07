@@ -13,7 +13,11 @@ use vodka_outputs.{outputs_at}
 use vodka_value.{get_all_value_to, value_geq}
 
 validator {
-  pub fn escrow(_datum: EscrowDatum, redeemer: EscrowRedeemer, ctx: ScriptContext) {
+  pub fn escrow(
+    _datum: EscrowDatum,
+    redeemer: EscrowRedeemer,
+    ctx: ScriptContext,
+  ) {
     when ctx.purpose is {
       Spend(utxo) -> {
         let Transaction { inputs, outputs, extra_signatories, .. } =
@@ -27,7 +31,12 @@ validator {
             // Only 1 input & output from same address
             expect InlineDatum(raw_input_datum) = input.output.datum
             expect InlineDatum(raw_output_datum) = output.datum
-            expect Initiation { initiator, initiator_assets, fee_address, fee_assets }: EscrowDatum = raw_input_datum
+            expect Initiation {
+              initiator,
+              initiator_assets,
+              fee_address,
+              fee_assets,
+            }: EscrowDatum = raw_input_datum
             expect output_datum: EscrowDatum = raw_output_datum
             let is_datum_updated =
               output_datum == ActiveEscrow {
@@ -141,7 +150,7 @@ validator {
             let is_signed =
               one_of_keys_signed(
                 extra_signatories,
-                [fee_pub_key, initiator_pub_key],
+                [fee_pub_key, recipient_pub_key],
               )
 
             is_signed && is_initiator_received_value && is_recipient_received_value
@@ -152,5 +161,4 @@ validator {
       _ -> False
     }
   }
-
 }
