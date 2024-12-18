@@ -174,8 +174,6 @@ test success_cancel_at_initiation() {
       is_fee_signed: True,
     }
 
-  // ERROR(Elaine): not sure if this is actually an error but at time of writing (165a3190a62) fee AND initiator must sign to cancel while at_initiation
-  // I think it makes sense but I need to be more confident before deploying
   let tx = get_cancel_test_tx(test_case)
   let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
   escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
@@ -333,17 +331,27 @@ test fail_cancel_without_recipient_value_returned() {
 type RecipientDepositTestCase {
   is_datum_updated: Bool,
   is_value_deposited: Bool,
+  is_initiator_assets_and_fee_deposited: Bool,
 }
 
-// FIXME(Elaine): this might actually be orthogonal
-// is_fee_deposited: Bool, // FIXME(Elaine): do we need this? for now lets not actually use this, since fee is deposited by intiiator (ocean protection), not recipient.
-// fee must be deposited for initiation to be well formed anyways
+// NOTE: the reason we're validating the initiator deposit in the recipient deposit
+// is because we have no way of validating the initiator deposit in the initiation.
+// This is because the initiation is just sending money to the escrow & slapping a datum on it
+// which cannot be validated at all, since it doesn't spend anything from escrow.
 
 fn get_deposit_test_tx(test_case: RecipientDepositTestCase) -> Transaction {
-  let RecipientDepositTestCase { is_datum_updated, is_value_deposited } =
-    test_case
-  let input_value = from_lovelace(2_000_000 + 2_000_000)
+  let RecipientDepositTestCase {
+    is_datum_updated,
+    is_value_deposited,
+    is_initiator_assets_and_fee_deposited,
+  } = test_case
   // first half is for initiator->recipient, second half is for fee
+  let input_value =
+    if is_initiator_assets_and_fee_deposited {
+      from_lovelace(2_000_000 + 2_000_000)
+    } else {
+      from_lovelace(2_000_000)
+    }
   let output_value =
     input_value
       |> if is_value_deposited {
@@ -368,7 +376,6 @@ fn get_deposit_test_tx(test_case: RecipientDepositTestCase) -> Transaction {
     |> complete()
 }
 
-//FIXME(Elaine): this is failing
 test success_deposit() {
   let output_reference = mock_utxo_ref(0, 1)
   let unused_mock_datum = Some(initiation_datum())
@@ -381,6 +388,7 @@ test success_deposit() {
     RecipientDepositTestCase {
       is_datum_updated: True,
       is_value_deposited: True,
+      is_initiator_assets_and_fee_deposited: True,
     }
 
   let tx = get_deposit_test_tx(test_case)
@@ -400,6 +408,7 @@ test fail_deposit_without_updating_datum() {
     RecipientDepositTestCase {
       is_datum_updated: False,
       is_value_deposited: True,
+      is_initiator_assets_and_fee_deposited: True,
     }
 
   let tx = get_deposit_test_tx(test_case)
@@ -419,8 +428,28 @@ test fail_deposit_without_depositing_value() {
     RecipientDepositTestCase {
       is_datum_updated: True,
       is_value_deposited: False,
+      is_initiator_assets_and_fee_deposited: True,
     }
 
+  let tx = get_deposit_test_tx(test_case)
+  let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
+  !escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
+}
+
+test fail_deposit_when_invalid_initiator_didnt_deposit_assets_and_fee() {
+  let output_reference = mock_utxo_ref(0, 1)
+  let unused_mock_datum = Some(initiation_datum())
+  let redeemer =
+    RecipientDeposit {
+      recipient: mock_pub_key_address(1, None),
+      recipient_assets: test_value(),
+    }
+  let test_case =
+    RecipientDepositTestCase {
+      is_datum_updated: True,
+      is_value_deposited: True,
+      is_initiator_assets_and_fee_deposited: False,
+    }
   let tx = get_deposit_test_tx(test_case)
   let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
   !escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
@@ -456,7 +485,7 @@ fn get_complete_test_tx(test_case: CompleteTestCase) -> Transaction {
 
   mocktail_tx()
     |> required_signer_hash(is_initiator_signed, mock_pub_key_hash(0)) //TODO(Elaine): remove this
-    // |> required_signer_hash(is_recipient_signed, mock_pub_key_hash(1))
+    |> required_signer_hash(is_recipient_signed, mock_pub_key_hash(1))
     |> required_signer_hash(is_fee_signed, mock_pub_key_hash(2))
     |> tx_in(
         True,
@@ -490,9 +519,27 @@ test success_complete() {
   let redeemer = CompleteTrade
   let test_case =
     CompleteTestCase {
-      is_initiator_signed: True,
+      is_initiator_signed: False,
       is_initiator_received_value: True,
-      // is_recipient_signed: True,
+      is_recipient_signed: True,
+      is_recipient_received_value: True,
+      is_fee_signed: True,
+      is_fee_received_value: True,
+    }
+
+  let tx = get_complete_test_tx(test_case)
+  let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
+  escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
+}
+
+test success_complete_with_fee_signed() {
+  let output_reference = mock_utxo_ref(0, 1)
+  let unused_mock_datum = Some(initiation_datum())
+  let redeemer = CompleteTrade
+  let test_case =
+    CompleteTestCase {
+      is_initiator_signed: False,
+      is_initiator_received_value: True,
       is_recipient_signed: False,
       is_recipient_received_value: True,
       is_fee_signed: True,
@@ -504,7 +551,7 @@ test success_complete() {
   escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
 }
 
-test fail_complete_without_initiator_signed() {
+test success_complete_with_recipient_signed() {
   let output_reference = mock_utxo_ref(0, 1)
   let unused_mock_datum = Some(initiation_datum())
   let redeemer = CompleteTrade
@@ -513,6 +560,25 @@ test fail_complete_without_initiator_signed() {
       is_initiator_signed: False,
       is_initiator_received_value: True,
       is_recipient_signed: True,
+      is_recipient_received_value: True,
+      is_fee_signed: False,
+      is_fee_received_value: True,
+    }
+
+  let tx = get_complete_test_tx(test_case)
+  let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
+  escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
+}
+
+test fail_complete_with_initiator_signed() {
+  let output_reference = mock_utxo_ref(0, 1)
+  let unused_mock_datum = Some(initiation_datum())
+  let redeemer = CompleteTrade
+  let test_case =
+    CompleteTestCase {
+      is_initiator_signed: True,
+      is_initiator_received_value: True,
+      is_recipient_signed: False,
       // NOTE(Elaine): fee signing should make this pass, make a new test
       is_recipient_received_value: True,
       is_fee_signed: False,
@@ -535,26 +601,7 @@ test fail_complete_without_value_sent_to_initiator() {
       is_initiator_received_value: False,
       is_recipient_signed: True,
       is_recipient_received_value: True,
-      is_fee_signed: False,
-      is_fee_received_value: True,
-    }
-
-  let tx = get_complete_test_tx(test_case)
-  let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
-  !escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
-}
-
-test fail_complete_without_recipeint_signed() {
-  let output_reference = mock_utxo_ref(0, 1)
-  let unused_mock_datum = Some(initiation_datum())
-  let redeemer = CompleteTrade
-  let test_case =
-    CompleteTestCase {
-      is_initiator_signed: True,
-      is_initiator_received_value: True,
-      is_recipient_signed: False,
-      is_recipient_received_value: True,
-      is_fee_signed: False,
+      is_fee_signed: True,
       is_fee_received_value: True,
     }
 
@@ -574,7 +621,7 @@ test fail_complete_without_value_sent_to_recipient() {
       is_initiator_received_value: True,
       is_recipient_signed: True,
       is_recipient_received_value: False,
-      is_fee_signed: False,
+      is_fee_signed: True,
       is_fee_received_value: True,
     }
 

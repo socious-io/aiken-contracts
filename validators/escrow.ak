@@ -76,12 +76,12 @@ validator escrow {
             |> from_asset_list()
             |> merge(from_asset_list(fee_assets))
 
-        let was_fee_deposited =
+        let was_initiator_assets_and_fee_deposited =
           value_geq(input.output.value, expected_input_value)
 
         // TODO(Elaine): need to check this is correct
         // let is_fee_deposited = 
-        is_datum_updated? && is_value_deposited? && was_fee_deposited?
+        is_datum_updated? && is_value_deposited? && was_initiator_assets_and_fee_deposited?
       }
       CancelTrade -> {
         expect ([input], []) =
