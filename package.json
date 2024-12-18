@@ -2,11 +2,48 @@
   "name": "aiken-contracts",
   "version": "1.0.0",
   "repository": "https://github.com/socious-io/aiken-contracts.git",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "browser": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/**/*"
+  ],
   "author": "card <cardenaso11@users.noreply.github.com>",
   "license": "GPL-3.0-only",
+  "scripts": {
+    "build": "tsup index.ts --format esm,cjs --dts",
+    "clean": "rm -rf .turbo && rm -rf dist && rm -rf node_modules",
+    "dev": "tsup index.ts --format esm,cjs --watch --dts",
+    "format": "prettier --check . --ignore-path ../../.gitignore",
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
+    "pack": "npm pack --pack-destination=./dist",
+    "test": "jest"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "globals": "^15.13.0",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1"
+  },
   "dependencies": {
-    "@meshsdk/core": "^1.7.10",
-    "cbor": "^10.0.2"
+    "@blockfrost/blockfrost-js": "^5.7.0",
+    "@meshsdk/common": "1.8.2",
+    "@meshsdk/core": "^1.8.2",
+    "@meshsdk/core-csl": "1.8.2",
+    "@types/node": "^22.10.2",
+    "@typescript-eslint/eslint-plugin": "^8.18.1",
+    "@typescript-eslint/parser": "^8.18.1"
   }
 }
