@@ -55,19 +55,24 @@ fn initiation_datum() -> EscrowDatum {
       fee_address: fee_address(),
       fee_assets,
     }
-  trace @"Initiation datum"
-  trace cbor.diagnostic(initiation_datum)
+  // trace @"Initiation datum"
+  // trace initiation_datum
   initiation_datum
 }
 
 fn active_datum(recipient: Address, recipient_assets: MValue) -> EscrowDatum {
-  ActiveEscrow {
-    initiator: initiator_address(),
-    initiator_assets: test_lovelace(),
-    recipient,
-    recipient_assets,
-    fee_address: fee_address(),
-    fee_assets: test_lovelace(),
+  // if recipient_assets != [] {
+  if False {
+    fail @"Recipient assets must be empty"
+  } else {
+    ActiveEscrow {
+      initiator: initiator_address(),
+      initiator_assets: test_lovelace(),
+      recipient,
+      recipient_assets,
+      fee_address: fee_address(),
+      fee_assets: test_lovelace(),
+    }
   }
 }
 
@@ -132,14 +137,13 @@ test success_cancel() {
   let output_reference = mock_utxo_ref(0, 1)
   let unused_mock_datum = Some(initiation_datum())
   trace @"Success cancel called"
-  trace cbor.diagnostic(unused_mock_datum)
+  trace unused_mock_datum
   let redeemer = CancelTrade
   let test_case =
     CancelTestCase {
       is_at_initiation: False,
       is_initiator_received_value: True,
       is_recipient_received_value: True,
-      // is_fee_received_value: True,
       is_initiator_signed: False,
       is_recipient_signed: False,
       is_fee_signed: True,
@@ -305,7 +309,8 @@ type RecipientDepositTestCase {
 fn get_deposit_test_tx(test_case: RecipientDepositTestCase) -> Transaction {
   let RecipientDepositTestCase { is_datum_updated, is_value_deposited } =
     test_case
-  let input_value = from_lovelace(2_000_000)
+  let input_value = from_lovelace(2_000_000 + 2_000_000)
+  // first half is for initiator->recipient, second half is for fee
   let output_value =
     input_value
       |> if is_value_deposited {
@@ -313,7 +318,8 @@ fn get_deposit_test_tx(test_case: RecipientDepositTestCase) -> Transaction {
         } else {
           add(_, "", "", 1_000_000)
         }
-
+  //NOTE(ELAINE, PHF): recipient will be depositing nothing in prod for the time being, all assets have to come from initiation
+  // also, PHF = post harvest flow
   mocktail_tx()
     |> tx_in(True, mock_tx_hash(0), 1, input_value, mock_script_address(0, None))
     |> tx_in_inline_datum(True, initiation_datum())

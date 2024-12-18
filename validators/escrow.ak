@@ -45,20 +45,43 @@ validator escrow {
             fee_address,
             fee_assets,
           }
-        let is_value_deposited =
-          value_geq(
-            output.value,
-            input.output.value
-              |> merge(
-                  recipient_assets
-                    |> from_asset_list()
-                    |> merge(fee_assets |> from_asset_list()),
-                ),
-          )
+
+        let expected_output_value =
+          input.output.value
+            |> merge(
+                recipient_assets
+                  |> from_asset_list(),
+              )
+        let old_contract_expected_value =
+          input.output.value
+            |> merge(recipient_assets |> from_asset_list())
+
+        trace @"output.value"
+        trace output.value
+        trace @"expected_output_value"
+        trace expected_output_value
+        trace @"old_contract_expected_value"
+        trace old_contract_expected_value
+        trace @"initiator_assets"
+        trace initiator_assets
+        trace @"fee_assets"
+        trace fee_assets
+        trace @"input.output.value"
+        trace input.output.value
+
+        let is_value_deposited = value_geq(output.value, expected_output_value)
+
+        let expected_input_value =
+          initiator_assets
+            |> from_asset_list()
+            |> merge(from_asset_list(fee_assets))
+
+        let was_fee_deposited =
+          value_geq(input.output.value, expected_input_value)
 
         // TODO(Elaine): need to check this is correct
         // let is_fee_deposited = 
-        is_datum_updated && is_value_deposited
+        is_datum_updated? && is_value_deposited? && was_fee_deposited?
       }
       CancelTrade -> {
         expect ([input], []) =
@@ -104,7 +127,7 @@ validator escrow {
 
             // Only admin can cancel trade, in which case, no fee is charged, and assets are returned
             // is_any_party_signed && is_initiator_received_value && is_recipient_received_value
-            is_fee_signed && is_initiator_received_value && is_recipient_received_value
+            is_fee_signed? && is_initiator_received_value? && is_recipient_received_value?
           }
         }
       }
@@ -129,6 +152,7 @@ validator escrow {
           value_geq(recipient_received, initiator_assets |> from_asset_list())
         let is_fee_received_value =
           value_geq(fee_recipient_recieved, fee_assets |> from_asset_list())
+        //FIXME(Elaine, PHF): For testing purposes fee addr may = initiator addr, check this case
         expect Some(initiator_pub_key) = address_pub_key(initiator)
         expect Some(recipient_pub_key) = address_pub_key(recipient)
         expect Some(fee_pub_key) = address_pub_key(fee_address)
@@ -145,7 +169,7 @@ validator escrow {
             [fee_pub_key, recipient_pub_key],
           )
 
-        is_signed && is_initiator_received_value && is_recipient_received_value
+        is_signed? && is_initiator_received_value? && is_recipient_received_value? && is_fee_received_value?
       }
     }
   }
