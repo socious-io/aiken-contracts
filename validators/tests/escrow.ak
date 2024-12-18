@@ -1,7 +1,7 @@
 use aiken/cbor
 use aiken/transaction.{ScriptContext, Spend, Transaction}
 use aiken/transaction/credential.{Address}
-use aiken/transaction/value.{add, from_asset, from_lovelace}
+use aiken/transaction/value.{add, from_asset, from_lovelace, merge}
 use escrow
 use escrow/types.{
   ActiveEscrow, CancelTrade, CompleteTrade, EscrowDatum, Initiation, MValue,
@@ -17,7 +17,8 @@ use mocktail/virgin_output_reference.{mock_tx_hash, mock_utxo_ref}
 
 type CancelTestCase {
   is_at_initiation: Bool,
-  is_initiator_received_value: Bool,
+  is_initiator_received_initiator_value: Bool,
+  is_initiator_received_fee_value: Bool,
   is_recipient_received_value: Bool,
   // is_fee_received_value: Bool,
   is_initiator_signed: Bool,
@@ -79,7 +80,8 @@ fn active_datum(recipient: Address, recipient_assets: MValue) -> EscrowDatum {
 fn get_cancel_test_tx(test_case: CancelTestCase) -> Transaction {
   let CancelTestCase {
     is_at_initiation,
-    is_initiator_received_value,
+    is_initiator_received_initiator_value,
+    is_initiator_received_fee_value,
     is_recipient_received_value,
     is_initiator_signed,
     is_recipient_signed,
@@ -87,27 +89,29 @@ fn get_cancel_test_tx(test_case: CancelTestCase) -> Transaction {
   } = test_case
 
   let initiator_output_value =
-    if is_initiator_received_value {
+    if is_initiator_received_initiator_value {
       from_lovelace(2_000_000)
     } else {
       from_asset("test", "test", 1)
     }
+      |> merge(
+          if is_initiator_received_fee_value {
+            from_lovelace(2_000_000)
+          } else {
+            from_lovelace(0)
+          },
+        )
+
   let recipient_output_value =
     if is_recipient_received_value {
       from_asset("test", "test", 1)
     } else {
       from_lovelace(2_000_000)
     }
-  //TODO(Elaine): check this & also the total_input_lovelace bit
-  let fee_output_value = 0
+  // first half is for initiator->recipient, second half is for fee
+  let total_input_lovelace = 2_000_000 + 2_000_000
 
-  // if is_fee_received_value {
-  //   from_lovelace(2_000_000)
-  // } else {
-  //   from_lovelace(0)
-  // }
-  // let total_input_lovelace = if is_fee_received_value { 4_000_000 } else { 2_000_000 }
-  let total_input_lovelace = 2_000_000
+  trace @"running get_cancel_test_tx"
 
   mocktail_tx()
     |> tx_in(
@@ -142,7 +146,8 @@ test success_cancel() {
   let test_case =
     CancelTestCase {
       is_at_initiation: False,
-      is_initiator_received_value: True,
+      is_initiator_received_initiator_value: True,
+      is_initiator_received_fee_value: True,
       is_recipient_received_value: True,
       is_initiator_signed: False,
       is_recipient_signed: False,
@@ -161,9 +166,10 @@ test success_cancel_at_initiation() {
   let test_case =
     CancelTestCase {
       is_at_initiation: True,
-      is_initiator_received_value: True,
+      is_initiator_received_initiator_value: True,
+      is_initiator_received_fee_value: True,
       is_recipient_received_value: True,
-      is_initiator_signed: True,
+      is_initiator_signed: False,
       is_recipient_signed: False,
       is_fee_signed: True,
     }
@@ -175,61 +181,22 @@ test success_cancel_at_initiation() {
   escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
 }
 
-test success_cancel_at_active_with_initiator_signed() {
+test fail_cancel_at_active_with_initiator_signed() {
   let output_reference = mock_utxo_ref(0, 1)
   let unused_mock_datum = Some(initiation_datum())
   let redeemer = CancelTrade
   let test_case =
     CancelTestCase {
       is_at_initiation: False,
-      is_initiator_received_value: True,
+      is_initiator_received_initiator_value: True,
+      is_initiator_received_fee_value: True,
       is_recipient_received_value: True,
-      is_initiator_signed: False,
+      is_initiator_signed: True,
       // TODO(Elaine): original test was True, make a version with this
       // we probably want a test variant to make sure fee signing implies (->/iff) success (given well formed)
       // we don't want ANY cancellations to be successful without fee signing
       is_recipient_signed: False,
-      is_fee_signed: True,
-    }
-
-  let tx = get_cancel_test_tx(test_case)
-  let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
-  escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
-}
-
-test success_cancel_at_active_with_recipient_signed() {
-  let output_reference = mock_utxo_ref(0, 1)
-  let unused_mock_datum = Some(initiation_datum())
-  let redeemer = CancelTrade
-  let test_case =
-    CancelTestCase {
-      is_at_initiation: False,
-      is_initiator_received_value: True,
-      is_recipient_received_value: True,
-      is_initiator_signed: False,
-      is_recipient_signed: False,
-      // used to be True in original test
-      is_fee_signed: True,
-    }
-
-  let tx = get_cancel_test_tx(test_case)
-  let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
-  escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
-}
-
-test fail_cancel_at_initiation_without_signature() {
-  let output_reference = mock_utxo_ref(0, 1)
-  let unused_mock_datum = Some(initiation_datum())
-  let redeemer = CancelTrade
-  let test_case =
-    CancelTestCase {
-      is_at_initiation: True,
-      is_initiator_received_value: True,
-      is_recipient_received_value: True,
-      is_initiator_signed: False,
-      is_recipient_signed: True,
-      // used to be True in original test
-      is_fee_signed: True,
+      is_fee_signed: False,
     }
 
   let tx = get_cancel_test_tx(test_case)
@@ -237,19 +204,63 @@ test fail_cancel_at_initiation_without_signature() {
   !escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
 }
 
-test fail_cancel_without_signature() {
+test fail_cancel_at_active_with_recipient_signed() {
   let output_reference = mock_utxo_ref(0, 1)
   let unused_mock_datum = Some(initiation_datum())
   let redeemer = CancelTrade
   let test_case =
     CancelTestCase {
       is_at_initiation: False,
-      is_initiator_received_value: True,
+      is_initiator_received_initiator_value: True,
+      is_initiator_received_fee_value: True,
+      is_recipient_received_value: True,
+      is_initiator_signed: False,
+      is_recipient_signed: True,
+      // used to be True in original test
+      is_fee_signed: False,
+    }
+
+  let tx = get_cancel_test_tx(test_case)
+  let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
+  !escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
+}
+
+test fail_cancel_at_initiation_without_fee_signature() {
+  let output_reference = mock_utxo_ref(0, 1)
+  let unused_mock_datum = Some(initiation_datum())
+  let redeemer = CancelTrade
+  let test_case =
+    CancelTestCase {
+      is_at_initiation: True,
+      is_initiator_received_initiator_value: True,
+      is_initiator_received_fee_value: True,
+      is_recipient_received_value: True,
+      is_initiator_signed: True,
+      is_recipient_signed: True,
+      // used to be True in original test
+      is_fee_signed: False,
+    }
+
+  let tx = get_cancel_test_tx(test_case)
+  let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
+  trace @"running fail_cancel_at_initiation_without_fee_signature"
+  !escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
+}
+
+test fail_cancel_without_fee_signature() {
+  let output_reference = mock_utxo_ref(0, 1)
+  let unused_mock_datum = Some(initiation_datum())
+  let redeemer = CancelTrade
+  let test_case =
+    CancelTestCase {
+      is_at_initiation: False,
+      is_initiator_received_initiator_value: True,
+      is_initiator_received_fee_value: True,
       is_recipient_received_value: True,
       // is_fee_received_value: True,
-      is_initiator_signed: False,
+      is_initiator_signed: True,
       // TODO(Elaine): we want a variant to test that neither initiator nor recipient can cancel
-      is_recipient_signed: False,
+      is_recipient_signed: True,
       is_fee_signed: False,
     }
 
@@ -265,8 +276,29 @@ test fail_cancel_without_initiator_value_returned() {
   let test_case =
     CancelTestCase {
       is_at_initiation: False,
-      is_initiator_received_value: False,
+      is_initiator_received_initiator_value: False,
+      is_initiator_received_fee_value: True,
       is_recipient_received_value: True,
+      is_initiator_signed: True,
+      is_recipient_signed: True,
+      is_fee_signed: True,
+    }
+
+  let tx = get_cancel_test_tx(test_case)
+  let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
+  !escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
+}
+
+test fail_cancel_without_fee_value_returned_to_initiator() {
+  let output_reference = mock_utxo_ref(0, 1)
+  let unused_mock_datum = Some(initiation_datum())
+  let redeemer = CancelTrade
+  let test_case =
+    CancelTestCase {
+      is_at_initiation: False,
+      is_initiator_received_initiator_value: False,
+      is_initiator_received_fee_value: True,
+      is_recipient_received_value: False,
       is_initiator_signed: True,
       is_recipient_signed: True,
       is_fee_signed: True,
@@ -284,7 +316,8 @@ test fail_cancel_without_recipient_value_returned() {
   let test_case =
     CancelTestCase {
       is_at_initiation: False,
-      is_initiator_received_value: True,
+      is_initiator_received_initiator_value: True,
+      is_initiator_received_fee_value: True,
       is_recipient_received_value: False,
       is_initiator_signed: True,
       is_recipient_signed: True,

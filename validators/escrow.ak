@@ -89,8 +89,8 @@ validator escrow {
         expect InlineDatum(raw_input_datum) = input.output.datum
         expect input_datum: EscrowDatum = raw_input_datum
         when input_datum is {
-          Initiation { initiator, .. } -> {
-            expect Some(pub_key) = address_pub_key(initiator)
+          Initiation { fee_address, .. } -> {
+            expect Some(pub_key) = address_pub_key(fee_address)
             key_signed(extra_signatories, pub_key)
           }
 
@@ -105,11 +105,11 @@ validator escrow {
             // fee quantity unused when cancelling
             let initiator_received = get_all_value_to(outputs, initiator)
             let recipient_received = get_all_value_to(outputs, recipient)
+            let initiator_should_have_recieved =
+              from_asset_list(initiator_assets)
+                |> merge(from_asset_list(fee_assets))
             let is_initiator_received_value =
-              value_geq(
-                initiator_received,
-                initiator_assets |> from_asset_list(),
-              )
+              value_geq(initiator_received, initiator_should_have_recieved)
             let is_recipient_received_value =
               value_geq(
                 recipient_received,
@@ -124,6 +124,13 @@ validator escrow {
             //     [initiator_pub_key, recipient_pub_key],
             //   )
             let is_fee_signed = key_signed(extra_signatories, fee_pub_key)
+
+            trace @"initiator_received"
+            trace initiator_received
+            trace @"initiator_should_have_recieved"
+            trace initiator_should_have_recieved
+            trace @"recipient_received"
+            trace recipient_received
 
             // Only admin can cancel trade, in which case, no fee is charged, and assets are returned
             // is_any_party_signed && is_initiator_received_value && is_recipient_received_value
