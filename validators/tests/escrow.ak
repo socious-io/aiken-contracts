@@ -2,7 +2,7 @@ use aiken/cbor
 use aiken/transaction.{ScriptContext, Spend, Transaction}
 use aiken/transaction/credential.{Address}
 use aiken/transaction/value.{add, from_asset, from_lovelace}
-use escrow.{escrow}
+use escrow
 use escrow/types.{
   ActiveEscrow, CancelTrade, CompleteTrade, EscrowDatum, Initiation, MValue,
   RecipientDeposit,
@@ -130,7 +130,7 @@ fn get_cancel_test_tx(test_case: CancelTestCase) -> Transaction {
 
 test success_cancel() {
   let output_reference = mock_utxo_ref(0, 1)
-  let unused_mock_datum = initiation_datum()
+  let unused_mock_datum = Some(initiation_datum())
   trace @"Success cancel called"
   trace cbor.diagnostic(unused_mock_datum)
   let redeemer = CancelTrade
@@ -147,12 +147,12 @@ test success_cancel() {
 
   let tx = get_cancel_test_tx(test_case)
   let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
-  escrow(unused_mock_datum, redeemer, ctx)
+  escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
 }
 
 test success_cancel_at_initiation() {
   let output_reference = mock_utxo_ref(0, 1)
-  let unused_mock_datum = initiation_datum()
+  let unused_mock_datum = Some(initiation_datum())
   let redeemer = CancelTrade
   let test_case =
     CancelTestCase {
@@ -168,12 +168,12 @@ test success_cancel_at_initiation() {
   // I think it makes sense but I need to be more confident before deploying
   let tx = get_cancel_test_tx(test_case)
   let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
-  escrow(unused_mock_datum, redeemer, ctx)
+  escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
 }
 
 test success_cancel_at_active_with_initiator_signed() {
   let output_reference = mock_utxo_ref(0, 1)
-  let unused_mock_datum = initiation_datum()
+  let unused_mock_datum = Some(initiation_datum())
   let redeemer = CancelTrade
   let test_case =
     CancelTestCase {
@@ -190,12 +190,12 @@ test success_cancel_at_active_with_initiator_signed() {
 
   let tx = get_cancel_test_tx(test_case)
   let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
-  escrow(unused_mock_datum, redeemer, ctx)
+  escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
 }
 
 test success_cancel_at_active_with_recipient_signed() {
   let output_reference = mock_utxo_ref(0, 1)
-  let unused_mock_datum = initiation_datum()
+  let unused_mock_datum = Some(initiation_datum())
   let redeemer = CancelTrade
   let test_case =
     CancelTestCase {
@@ -210,12 +210,12 @@ test success_cancel_at_active_with_recipient_signed() {
 
   let tx = get_cancel_test_tx(test_case)
   let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
-  escrow(unused_mock_datum, redeemer, ctx)
+  escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
 }
 
 test fail_cancel_at_initiation_without_signature() {
   let output_reference = mock_utxo_ref(0, 1)
-  let unused_mock_datum = initiation_datum()
+  let unused_mock_datum = Some(initiation_datum())
   let redeemer = CancelTrade
   let test_case =
     CancelTestCase {
@@ -230,12 +230,12 @@ test fail_cancel_at_initiation_without_signature() {
 
   let tx = get_cancel_test_tx(test_case)
   let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
-  !escrow(unused_mock_datum, redeemer, ctx)
+  !escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
 }
 
 test fail_cancel_without_signature() {
   let output_reference = mock_utxo_ref(0, 1)
-  let unused_mock_datum = initiation_datum()
+  let unused_mock_datum = Some(initiation_datum())
   let redeemer = CancelTrade
   let test_case =
     CancelTestCase {
@@ -251,12 +251,12 @@ test fail_cancel_without_signature() {
 
   let tx = get_cancel_test_tx(test_case)
   let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
-  !escrow(unused_mock_datum, redeemer, ctx)
+  !escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
 }
 
 test fail_cancel_without_initiator_value_returned() {
   let output_reference = mock_utxo_ref(0, 1)
-  let unused_mock_datum = initiation_datum()
+  let unused_mock_datum = Some(initiation_datum())
   let redeemer = CancelTrade
   let test_case =
     CancelTestCase {
@@ -270,12 +270,12 @@ test fail_cancel_without_initiator_value_returned() {
 
   let tx = get_cancel_test_tx(test_case)
   let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
-  !escrow(unused_mock_datum, redeemer, ctx)
+  !escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
 }
 
 test fail_cancel_without_recipient_value_returned() {
   let output_reference = mock_utxo_ref(0, 1)
-  let unused_mock_datum = initiation_datum()
+  let unused_mock_datum = Some(initiation_datum())
   let redeemer = CancelTrade
   let test_case =
     CancelTestCase {
@@ -289,7 +289,7 @@ test fail_cancel_without_recipient_value_returned() {
 
   let tx = get_cancel_test_tx(test_case)
   let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
-  !escrow(unused_mock_datum, redeemer, ctx)
+  !escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
 }
 
 // recipient will be the person recieving pay for their work
@@ -332,7 +332,7 @@ fn get_deposit_test_tx(test_case: RecipientDepositTestCase) -> Transaction {
 //FIXME(Elaine): this is failing
 test success_deposit() {
   let output_reference = mock_utxo_ref(0, 1)
-  let unused_mock_datum = initiation_datum()
+  let unused_mock_datum = Some(initiation_datum())
   let redeemer =
     RecipientDeposit {
       recipient: mock_pub_key_address(1, None),
@@ -346,12 +346,12 @@ test success_deposit() {
 
   let tx = get_deposit_test_tx(test_case)
   let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
-  escrow(unused_mock_datum, redeemer, ctx)
+  escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
 }
 
 test fail_deposit_without_updating_datum() {
   let output_reference = mock_utxo_ref(0, 1)
-  let unused_mock_datum = initiation_datum()
+  let unused_mock_datum = Some(initiation_datum())
   let redeemer =
     RecipientDeposit {
       recipient: mock_pub_key_address(1, None),
@@ -365,12 +365,12 @@ test fail_deposit_without_updating_datum() {
 
   let tx = get_deposit_test_tx(test_case)
   let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
-  !escrow(unused_mock_datum, redeemer, ctx)
+  !escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
 }
 
 test fail_deposit_without_depositing_value() {
   let output_reference = mock_utxo_ref(0, 1)
-  let unused_mock_datum = initiation_datum()
+  let unused_mock_datum = Some(initiation_datum())
   let redeemer =
     RecipientDeposit {
       recipient: mock_pub_key_address(1, None),
@@ -384,7 +384,7 @@ test fail_deposit_without_depositing_value() {
 
   let tx = get_deposit_test_tx(test_case)
   let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
-  !escrow(unused_mock_datum, redeemer, ctx)
+  !escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
 }
 
 type CompleteTestCase {
@@ -447,7 +447,7 @@ fn get_complete_test_tx(test_case: CompleteTestCase) -> Transaction {
 
 test success_complete() {
   let output_reference = mock_utxo_ref(0, 1)
-  let unused_mock_datum = initiation_datum()
+  let unused_mock_datum = Some(initiation_datum())
   let redeemer = CompleteTrade
   let test_case =
     CompleteTestCase {
@@ -462,12 +462,12 @@ test success_complete() {
 
   let tx = get_complete_test_tx(test_case)
   let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
-  escrow(unused_mock_datum, redeemer, ctx)
+  escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
 }
 
 test fail_complete_without_initiator_signed() {
   let output_reference = mock_utxo_ref(0, 1)
-  let unused_mock_datum = initiation_datum()
+  let unused_mock_datum = Some(initiation_datum())
   let redeemer = CompleteTrade
   let test_case =
     CompleteTestCase {
@@ -482,13 +482,13 @@ test fail_complete_without_initiator_signed() {
 
   let tx = get_complete_test_tx(test_case)
   let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
-  !escrow(unused_mock_datum, redeemer, ctx)
+  !escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
 }
 
 //NOTE(Elaine): need positive and negative test cases for fee
 test fail_complete_without_value_sent_to_initiator() {
   let output_reference = mock_utxo_ref(0, 1)
-  let unused_mock_datum = initiation_datum()
+  let unused_mock_datum = Some(initiation_datum())
   let redeemer = CompleteTrade
   let test_case =
     CompleteTestCase {
@@ -502,12 +502,12 @@ test fail_complete_without_value_sent_to_initiator() {
 
   let tx = get_complete_test_tx(test_case)
   let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
-  !escrow(unused_mock_datum, redeemer, ctx)
+  !escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
 }
 
 test fail_complete_without_recipeint_signed() {
   let output_reference = mock_utxo_ref(0, 1)
-  let unused_mock_datum = initiation_datum()
+  let unused_mock_datum = Some(initiation_datum())
   let redeemer = CompleteTrade
   let test_case =
     CompleteTestCase {
@@ -521,12 +521,12 @@ test fail_complete_without_recipeint_signed() {
 
   let tx = get_complete_test_tx(test_case)
   let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
-  !escrow(unused_mock_datum, redeemer, ctx)
+  !escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
 }
 
 test fail_complete_without_value_sent_to_recipient() {
   let output_reference = mock_utxo_ref(0, 1)
-  let unused_mock_datum = initiation_datum()
+  let unused_mock_datum = Some(initiation_datum())
   trace @"fail complete without value sent to recipient test"
   let redeemer = CompleteTrade
   let test_case =
@@ -541,5 +541,5 @@ test fail_complete_without_value_sent_to_recipient() {
 
   let tx = get_complete_test_tx(test_case)
   let ctx = ScriptContext { purpose: Spend(output_reference), transaction: tx }
-  !escrow(unused_mock_datum, redeemer, ctx)
+  !escrow.escrow.spend(unused_mock_datum, redeemer, output_reference, tx)
 }
